@@ -47,7 +47,9 @@ How to run locally
 The program `url_shortener.py` can either be run as a script or imported
 as a Python module. To run it as a script, do
 
+```bash
     python url_shortener.py
+```
 
 with a Python version of at least<sup id="a2">[2](#f2)</sup> 3.6.
 The following third-party Python packages are required:
@@ -61,8 +63,10 @@ will be confronted with a self-evident interface.
 To change the settings shown at start-up, set the corresponding
 environment variables. Consider
 
-    export port=8888  # Or supply it as below
-    nprocs=6 verbosity=2 python url_shortener.py
+```bash
+export port=8888  # Or supply it as below
+nprocs=6 verbosity=2 python url_shortener.py
+```
 
 which starts `url_shortener.py` on port `8888`, using `6` server
 processors and a verbosity level of `2`.
@@ -70,19 +74,20 @@ processors and a verbosity level of `2`.
 To run the service from within another Python module, include code
 like so:
 
-    import url_shortener
+```python
+import url_shortener
 
-    # Non-blocking example
-    killer = url_shortener.start_service(block=False)
-    # Do computation
-    ...
-    # When done, shut down the service like so
-    killer()
+# Non-blocking example
+killer = url_shortener.start_service(block=False)
+# Do computation
+...
+# When done, shut down the service like so
+killer()
 
-    # Blocking example
-    url_shortener.start_service(port=8888, nprocs=6)
-    unreachable_statement  # Untill service is killed, e.g. via Ctrl+C
-
+# Blocking example
+url_shortener.start_service(port=8888, nprocs=6)
+unreachable_statement  # Untill service is killed, e.g. via Ctrl+C
+```
 
 ### Testing
 A test suite consisting of correctness and stress tests is can be found
@@ -99,11 +104,12 @@ it is nicer to run it in terminal window separate from the tests.
 Here is an example demonstrating the effectiveness of having multiple
 server processes:
 
-    for nprocs in $(seq 4 -1 1); do
-        rm -f db*.sqlite  # Remove database
-        nprocs=${nprocs} ./test
-    done
-
+```bash
+for nprocs in $(seq 4 -1 1); do
+    rm -f db*.sqlite  # Remove database
+    nprocs=${nprocs} ./test
+done
+```
 
 
 <b id="f1">¹</b> With the exception of left 0-padded strings. [↩](#a1)
