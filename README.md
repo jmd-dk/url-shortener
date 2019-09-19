@@ -3,7 +3,7 @@ URL shortener
 This Python project implements URL shortening as a web service,
 using the [Tornado](https://www.tornadoweb.org/) framework.
 
-In an effort to scale the service, it utilizes cuncurrency at both
+In an effort to scale the service, it utilizes concurrency at both
 the asyncio and multiprocessing level.
 
 The service maps arbitrary URLs to short URLs, which are kept in
@@ -19,7 +19,7 @@ Design
   still simpler built-in threaded HTTP server in Python was rejected
   due to bad performance at high load.
 - **Concurrency**: The use of asyncio means that a single process
-  can serve many requests concurrently. Furhtermore, any number of
+  can serve many requests concurrently. Furthermore, any number of
   processes may be added to the pool of web servers, through the use
   of a multiprocessing feature of Tornado. On top of this, a separate
   process handles the database.
@@ -61,7 +61,7 @@ will be confronted with a self-evident interface.
 To change the settings shown at start-up, set the corresponding
 environment variables. Consider
 
-    export port=8888
+    export port=8888  # Or supply it as below
     nprocs=6 verbosity=2 python url_shortener.py
 
 which starts `url_shortener.py` on port `8888`, using `6` server
@@ -99,7 +99,7 @@ it is nicer to run it in terminal window separate from the tests.
 Here is an example demonstrating the effectiveness of having multiple
 server processes:
 
-    for nprocs in $(seq 1 4); do
+    for nprocs in $(seq 4 -1 1); do
         rm -f db*.sqlite  # Remove database
         nprocs=${nprocs} ./test
     done

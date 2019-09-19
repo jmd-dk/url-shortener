@@ -3,7 +3,7 @@
 # This script tests the URL shortener Python web service.
 # It perform correctness and stress tests through HTML
 # GET and POST requests.
-# Specifications needed for the web server may be changd below.
+# Specifications needed for the web server may be changed below.
 # Test output is written to stdout+stderr.
 # If the web service is not already running, it will be fire up.
 # In this case, it will also be shut down at the end of the script.
@@ -275,8 +275,8 @@ printf "\n${esc_bold}Stress tests${esc_normal}\n"
 # Stress test root GET
 printf "Test GET:      "
 stress_get(){
-    n=$1  # Number of requst batches
-    N=$2  # Number of requsts to send in a single curl command
+    n=$1  # Number of request batches
+    N=$2  # Number of requests to send in a single curl command
     pids=()
     t0=$(date +%s%N)
     for i in $(seq 1 $n); do
@@ -331,8 +331,8 @@ for i in $(seq 1 $n); do
 done
 # Do the stress test
 stress_post(){
-    n=$1  # Number of requst batches
-    N=$2  # Number of requsts to send in a single curl command
+    n=$1  # Number of request batches
+    N=$2  # Number of requests to send in a single curl command
     pids=()
     t0=$(date +%s%N)
     for url_long in ${urls_long[@]}; do
@@ -363,10 +363,10 @@ for url_long in ${urls_long[@]}; do
     url_short="$(get_url_short "${html}")"
     urls_short+=("${url_short}")
 done
-# Do the tress test
+# Do the stress test
 stress_redirect(){
-    n=$1  # Number of requst batches
-    N=$2  # Number of requsts to send in a single curl command
+    n=$1  # Number of request batches
+    N=$2  # Number of requests to send in a single curl command
     pids=()
     t0=$(date +%s%N)
     for url_short in ${urls_short[@]}; do

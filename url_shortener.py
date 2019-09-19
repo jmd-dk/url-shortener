@@ -347,7 +347,7 @@ class Service:
         # except the master process, i.e. the one originally
         # responsible for launching the service, and thus a common
         # ancestor to all other running processes. This process then
-        # gets the process ID of all its descendents (through a hacky
+        # gets the process ID of all its descendants (through a hacky
         # call to the system ps command), and then asks the system to
         # kill these.
         if os.getpid() != self.master_pid:
