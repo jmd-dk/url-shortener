@@ -45,6 +45,13 @@ make use of asyncio or threads.
 
 How to run locally
 ------------------
+To run the code, you will need<sup id="a2">[2](#f2)</sup> Python 3.6+,
+along with the [Tornado](https://www.tornadoweb.org/),
+[sqlitedict](https://github.com/RaRe-Technologies/sqlitedict/) and
+[url-normalize](https://github.com/niksite/url-normalize) third-party
+packages. The code also uses various standard shell utilities, which
+has only been tested on a Linux system (i.e. using GNU utilities).
+
 The program `url_shortener.py` can either be run as a script or imported
 as a Python module. To run it as a script, do
 
@@ -52,11 +59,6 @@ as a Python module. To run it as a script, do
     python url_shortener.py
 ```
 
-with a Python version of at least<sup id="a2">[2](#f2)</sup> 3.6.
-The following third-party Python packages are required:
-[Tornado](https://www.tornadoweb.org/),
-[sqlitedict](https://github.com/RaRe-Technologies/sqlitedict/),
-[url-normalize](https://github.com/niksite/url-normalize).
 The web service will start up on `localhost`, using `port=8000`,
 as displayed on start-up. Now visit `http://localhost:8000/` in a
 browser and you will be confronted with a self-evident interface.
