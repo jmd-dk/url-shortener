@@ -26,6 +26,7 @@ stop_service(){
         return
     fi
     kill -SIGINT  ${pid_service} 2>/dev/null || :
+    sleep 1
     kill -SIGKILL ${pid_service} 2>/dev/null || :
 }
 ctrl_c(){
@@ -296,7 +297,7 @@ N=400
 deltats="$(stress_get $n $N)"
 deltat0=$(echo "${deltats}" | awk '{print $1}')
 deltat1=$(echo "${deltats}" | awk '{print $2}')
-printf "${n}*${N} = $((n*N)) request send in ${deltat0} ms, \
+printf "${n}*${N} = $((n*N)) requests send in ${deltat0} ms, \
 served in ${deltat1} ms\n"
 
 # Stress test POST
@@ -351,7 +352,7 @@ stress_post(){
 deltats="$(stress_post $n $N)"
 deltat0=$(echo "${deltats}" | awk '{print $1}')
 deltat1=$(echo "${deltats}" | awk '{print $2}')
-printf "${n}*${N} = $((n*N)) request send in ${deltat0} ms, \
+printf "${n}*${N} = $((n*N)) requests send in ${deltat0} ms, \
 served in ${deltat1} ms\n"
 
 # Stress test redirect
@@ -384,7 +385,7 @@ stress_redirect(){
 deltats="$(stress_redirect $n $N)"  # n and N reused from the POST stress test
 deltat0=$(echo "${deltats}" | awk '{print $1}')
 deltat1=$(echo "${deltats}" | awk '{print $2}')
-printf "${n}*${N} = $((n*N)) request send in ${deltat0} ms, \
+printf "${n}*${N} = $((n*N)) requests send in ${deltat0} ms, \
 served in ${deltat1} ms\n"
 
 
