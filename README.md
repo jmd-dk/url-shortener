@@ -84,8 +84,7 @@ like so:
     unreachable_statement  # Untill service is killed, e.g. via Ctrl+C
 
 
-Testing
-~~~~~~~
+### Testing
 A test suite consisting of correctness and stress tests is can be found
 in the `test` bash script. As with the Python script, the various
 settings may be set through environment variables. Importantly,
