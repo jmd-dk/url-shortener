@@ -16,7 +16,7 @@
 [ -n "${database}"  ] || database=db.sqlite
 [ -n "${nprocs}"    ] || nprocs=4
 [ -n "${verbosity}" ] || verbosity=1
-python="/home/jeppe/anaconda3/bin/python"
+[ -n "${python}"    ] || python="/home/jeppe/anaconda3/bin/python"
 pyscript="./url_shortener.py"
 
 # Set up error trapping, exiting on error.
@@ -26,7 +26,7 @@ stop_service(){
         return
     fi
     kill -SIGINT  ${pid_service} 2>/dev/null || :
-    # kill -SIGKILL ${pid_service} 2>/dev/null || :
+    kill -SIGKILL ${pid_service} 2>/dev/null || :
 }
 ctrl_c(){
     stop_service
