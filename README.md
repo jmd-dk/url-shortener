@@ -67,8 +67,46 @@ environment variables. Consider
 which starts `url_shortener.py` on port `8888`, using `6` server
 processors and a verbosity level of `2`.
 
+To run the service from within another Python module, include code
+like so:
+
+    import url_shortener
+
+    # Non-blocking example
+    killer = url_shortener.start_service(block=False)
+    # Do computation
+    ...
+    # When done, shut down the service like so
+    killer()
+
+    # Blocking example
+    url_shortener.start_service(port=8888, nprocs=6)
+    unreachable_statement  # Untill service is killed, e.g. via Ctrl+C
+
+
+Testing
+~~~~~~~
+A test suite consisting of correctness and stress tests is can be found
+in the `test` bash script. As with the Python script, the various
+settings may be set through environment variables. Importantly,
+the `python` variable, storing the path to the python interpreter,
+should also set (may also be done permanently in the `test` source).
+
+If the service is already running on the matching `address` and `port`,
+this will be used for the test. Otherwise, a new service will be
+spun up. As some warnings are emitted by the service during the tests,
+it is nicer to run it in terminal window separate from the tests.
+
+Here is an example demonstrating the effectiveness of having multiple
+server processes:
+
+    for nprocs in $(seq 1 4); do
+        rm -f db*.sqlite  # Remove database
+        nprocs=${nprocs} ./test
+    done
+
 
 
 <b id="f1">¹</b> With the exception of left 0-padded strings. [↩](#a1)
 
-<b id="f2">²</b> I have only tested it with Python 3.7. [↩](#a2)
+<b id="f2">²</b> Python 3.7+ needed to run without constant TypeError's. [↩](#a2)
