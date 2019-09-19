@@ -22,6 +22,111 @@ import sqlitedict
 
 
 
+# The classes in this module implement the URL shortener web service.
+# Below is a quick overview of these classes and their relations.
+# - Service: This is the top-most class, storing the web application
+#   as a Tornado application + HTTP server.
+# - MainHandler and RedirectHandler: These HTTP request handlers take care
+#   of the GET+POST requests on the root page, and the redirection (GET)
+#   requests on any subpage, respectively. They live on the Tornado
+#   application on the server object.
+# - Database: Small class representing the two key-value stores.
+#   Lives on the service object.
+# - Encoder: General class for implementing numeric encodings,
+#   i.e. transformations between integers and their str representation
+#   in another base. Used to map integers to alphanumeric strs
+#   (short URLs). Lives on the service object.
+# - LruCache: Simple `last recently used` cache, relying on dicts bein
+#   insertion ordered hash maps (CPython 3.6+, Python 3.7+). This is used
+#   to cache communicating between server processes and the
+#   database processes (the normal functools.lru_cache can not be used
+#   with coroutines). Lives on the service object.
+# Finally, this module defines a single function, start_service,
+# which can be used to start the web service from another Python script.
+# Alternatively, you may run this file as a script, in which case this
+# function is called automatically.
+
+
+
+# Last recently used cache, used to cache the
+# database lookups on the server processes.
+class LruCache:
+    def __init__(self, capacity=1024, data=None):
+        self.capacity = capacity
+        if data is None:
+            data = {}
+        self.data = dict(data)
+
+    def get(self, key):
+        try:
+            val = self[key]
+        except KeyError:
+            return None
+        return val
+
+    def __getitem__(self, key):
+        val = self.data[key]
+        # If here, lookup was succesfull.
+        # Reinsert the item, so that it appears at the top.
+        self.data.pop(key)
+        self.data[key] = val
+        return val
+
+    def __setitem__(self, key, val):
+        # Pop if key already exists,
+        # so that when inserted it appears at the end.
+        try:
+            self.data.pop(key)
+        except KeyError:
+            pass
+        # Pop first used if full
+        if len(self) == self.capacity:
+            self.data.pop(next(iter(self.data)))
+        self.data[key] = val
+
+    def __len__(self):
+        return len(self.data)
+
+# Class handling numeric encoding of numbers in any base
+class Encoder:
+    def __init__(self, alphabet):
+        self.alphabet = alphabet
+        self.base = len(self.alphabet)
+
+    def encode(self, number):
+        digits = []
+        while number:
+            number_new = number//self.base
+            remainder = number - number_new*self.base
+            number = number_new
+            digits.append(remainder)
+        if not digits:
+            digits = [0]
+        return ''.join(self.alphabet[digit] for digit in reversed(digits))
+
+# Class representing the sqlite key-value database
+class Database:
+    def __init__(self, filename):
+        # The database consists of two files, one for mapping long
+        # URLs to short URLs, and one for the reverse mapping.
+        if '.' in filename:
+            left, dot, right = filename.rpartition('.')
+        else:
+            left, dot, right = filename, '', ''
+        self.filenames = {
+            'long2short': f'{left}_l2s{dot}{right}',
+            'short2long': f'{left}_s2l{dot}{right}',
+        }
+
+    # Context manager for opening a table within the database
+    @contextlib.contextmanager
+    def open(self, mapping, *args, **kwargs):
+        with sqlitedict.SqliteDict(self.filenames[mapping], *args, **kwargs) as table:
+            # Yield control (and the table) back to the caller
+            yield table
+            # Commit changes to disk before closing file
+            table.commit()
+
 # The main HTML request handler, responsible for handling
 # GET and POST requests to the root page.
 class MainHandler(tornado.web.RequestHandler):
@@ -144,85 +249,6 @@ class RedirectHandler(MainHandler):
             return
         # Database lookup failed
         await self.send_error_emulate(404, f'Destination not found: "{path}"')
-
-# Class handling numeric encoding of numbers in any base
-class Encoder:
-    def __init__(self, alphabet):
-        self.alphabet = alphabet
-        self.base = len(self.alphabet)
-
-    def encode(self, number):
-        digits = []
-        while number:
-            number_new = number//self.base
-            remainder = number - number_new*self.base
-            number = number_new
-            digits.append(remainder)
-        if not digits:
-            digits = [0]
-        return ''.join(self.alphabet[digit] for digit in reversed(digits))
-
-# Class representing the sqlite key-value database
-class Database:
-    def __init__(self, filename):
-        # The database consists of two files, one for mapping long
-        # URLs to short URLs, and one for the reverse mapping.
-        if '.' in filename:
-            left, dot, right = filename.rpartition('.')
-        else:
-            left, dot, right = filename, '', ''
-        self.filenames = {
-            'long2short': f'{left}_l2s{dot}{right}',
-            'short2long': f'{left}_s2l{dot}{right}',
-        }
-
-    # Context manager for opening a table within the database
-    @contextlib.contextmanager
-    def open(self, mapping, *args, **kwargs):
-        with sqlitedict.SqliteDict(self.filenames[mapping], *args, **kwargs) as table:
-            # Yield control (and the table) back to the caller
-            yield table
-            # Commit changes to disk before closing file
-            table.commit()
-
-# Last recently used cache, used to cache the
-# database lookups on the server processes.
-class LruCache:
-    def __init__(self, capacity=1024, data=None):
-        self.capacity = capacity
-        if data is None:
-            data = {}
-        self.data = dict(data)
-
-    def get(self, key):
-        try:
-            val = self[key]
-        except KeyError:
-            return None
-        return val
-
-    def __getitem__(self, key):
-        val = self.data[key]
-        # If here, lookup was succesfull.
-        # Reinsert the item, so that it appears at the top.
-        self.data.pop(key)
-        self.data[key] = val
-        return val
-
-    def __setitem__(self, key, val):
-        # Pop if key already exists,
-        # so that when inserted it appears at the end.
-        try:
-            self.data.pop(key)
-        except KeyError:
-            pass
-        # Pop first used if full
-        if len(self) == self.capacity:
-            self.data.pop(next(iter(self.data)))
-        self.data[key] = val
-
-    def __len__(self):
-        return len(self.data)
 
 # Class representing the web service.
 # It has the Tornado server and application as attributes.
