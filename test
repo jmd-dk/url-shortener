@@ -1,0 +1,392 @@
+#!/usr/bin/env bash
+
+# This script tests the URL shortener Python web service.
+# It perform correctness and stress tests through HTML
+# GET and POST requests.
+# Specifications needed for the web server may be changd below.
+# Test output is written to stdout+stderr.
+# If the web service is not already running, it will be fire up.
+# In this case, it will also be shut down at the end of the script.
+
+
+
+# Specifications
+[ -n "${address}"   ] || address=localhost
+[ -n "${port}"      ] || port=8000
+[ -n "${database}"  ] || database=db.sqlite
+[ -n "${nprocs}"    ] || nprocs=4
+[ -n "${verbosity}" ] || verbosity=1
+python="/home/jeppe/anaconda3/bin/python"
+pyscript="./url_shortener.py"
+
+# Set up error trapping, exiting on error.
+# Stop the web service before exiting.
+stop_service(){
+    if [ -z "${pid_service}" ]; then
+        return
+    fi
+    kill -SIGINT  ${pid_service} 2>/dev/null || :
+    # kill -SIGKILL ${pid_service} 2>/dev/null || :
+}
+ctrl_c(){
+    stop_service
+    trap : 0
+    exit 2
+}
+abort(){
+    exit_code=$?
+    stop_service
+    if [ -n "${exit_code}" ] && [ ${exit_code} -ne 0 ]; then
+        exit ${exit_code}
+    fi
+    exit 1
+}
+trap 'ctrl_c' SIGINT
+trap 'abort'  EXIT
+set -e
+graceful_exit(){
+    stop_service
+    trap : 0
+    exit
+}
+
+# Always operate from the directory of this script
+this_file="$(readlink -f "${BASH_SOURCE[0]}")"
+this_dir="$(dirname "${this_file}")"
+cd "${this_dir}"
+
+# Some ANSI/VT100 escape sequences, for pretty output
+esc="\x1b"
+esc_normal="${esc}[0m"
+esc_bold="${esc}[1m"
+esc_red="${esc}[91m"
+FAILED="${esc_bold}${esc_red}FAILED${esc_normal}"
+
+# Start web service
+start_service(){
+    [ -z "${address}"   ] || export address=${address}
+    [ -z "${port}"      ] || export port=${port}
+    [ -z "${database}"  ] || export database=${database}
+    [ -z "${nprocs}"    ] || export nprocs=${nprocs}
+    [ -z "${verbosity}" ] || export verbosity=${verbosity}
+    # Do not start service if already running
+    nc -z ${address} ${port} && return
+    stop_service
+    "${python}" "${pyscript}" & pid_service=$!
+    sleep 1  # Let service initialize completely
+}
+start_service
+
+
+
+#####################
+# Correctness tests #
+#####################
+printf "\n${esc_bold}Correctness tests${esc_normal}\n"
+# Function supplying default curl options
+curl_options(){
+    request=GET
+    if [ -n "$1" ]; then
+        request=$1
+    fi
+    destination="${address}:${port}"
+    if [ -n "$2" ]; then
+        destination=$2
+    fi
+    echo --fail --silent --show-error --request ${request} ${destination}
+}
+# Function grepping for a substring in a string,
+# exiting if not found.
+strgrep(){
+    str="$1"
+    substr="$2"
+    error_message="$3"
+    grep_options="$4"
+    echo "${str}" | grep ${grep_options} "${substr}" >/dev/null \
+        || (printf "${error_message}\n" >&2 && exit 1)
+}
+# Function that extracts the short URL from the HTML
+get_url_short(){
+    html="$1"
+    url_short="$(echo "${html}" | grep "Shortened URL" \
+        | grep -oP '(?<=").*?(?=")' | tail -n 1)"
+    echo "${url_short}"
+}
+
+# Get the root HTML page and ensure the presence of key words
+printf "Test GET             "
+html="$(curl $(curl_options))"
+error_message="${FAILED}\nIncorrect root HTML GET response:\n${html}\n"
+strgrep "${html}" "URL shortener" "${error_message}"
+strgrep "${html}" "Long URL"      "${error_message}"
+strgrep "${html}" "Shortened URL" "${error_message}" -v
+echo "."
+
+# Send correctly formatted POST requests and sanity check the responses
+printf "Test POST            "
+urls_long=(                 \
+    https://www.google.com/ \
+    https://www.google.com  \
+    http://www.google.com/  \
+    http://www.google.com   \
+    https://google.com/     \
+    https://google.com      \
+    http://google.com/      \
+    http://google.com       \
+    www.google.com/         \
+    www.google.com          \
+    google.com/             \
+    google.com              \
+)
+url_long_canonicals=(       \
+    https://www.google.com/ \
+    http://www.google.com/  \
+    https://google.com/     \
+    http://google.com/      \
+)
+urls_endpoint=()
+for url_long in ${urls_long[@]}; do
+    html="$(curl $(curl_options POST) -d "url_long=${url_long}")"
+    # Sanity check the response
+    error_message="${FAILED}\nIncorrect root HTML POST response:\n${html}"
+    strgrep "${html}" "URL shortener" "${error_message}"
+    strgrep "${html}" "Long URL"      "${error_message}"
+    strgrep "${html}" "Shortened URL" "${error_message}"
+    # Extract the short URL and request its redirection
+    url_short="$(get_url_short "${html}")"
+    url_endpoint="$(curl $(curl_options GET "${url_short}") \
+        -L -w %{url_effective} -o /dev/null 2>/dev/null || :)"
+    urls_endpoint+=("${url_endpoint}")
+done
+echo "."
+
+# Check that the returned short URLs redirect to the canonical URL
+printf "Test redirect        "
+for url_endpoint in ${urls_endpoint[@]}; do
+    success="no"
+    for url_long_canonical in ${url_long_canonicals[@]}; do
+        if [ "${url_endpoint}" == "${url_long_canonical}" ]; then
+            success="yes"
+            break
+        fi
+    done
+    if [ "${success}" == "no" ]; then
+        printf "${FAILED}\nIncorrect redirection:
+url_long=${url_long}
+url_short=${url_short}
+url_endpoint=${url_endpoint}
+url_long_canonicals=(${url_long_canonicals[0]} ${url_long_canonicals[1]})
+" >&2
+    exit 1
+    fi
+done
+# Further test the long URL -> short URL -> long URL mapping,
+# using many simultaneous requests with different data.
+urls_long=(                    \
+    https://www.google.com/    \
+    https://www.youtube.com/   \
+    https://www.facebook.com/  \
+    https://www.wikipedia.org/ \
+    https://www.yahoo.com/     \
+    https://www.instagram.com/ \
+    https://twitter.com/       \
+    https://www.office.com/    \
+    https://www.linkedin.com/  \
+    https://www.ebay.com/      \
+    https://www.twitch.tv/     \
+    https://stackoverflow.com/ \
+    https://www.imdb.com/      \
+    https://github.com/        \
+    https://www.apple.com/     \
+    https://www.pinterest.com/ \
+)
+check_mapping(){
+    url_long="$1"
+    html="$(curl $(curl_options POST) -d "url_long=${url_long}")"
+    url_short="$(get_url_short "${html}")"
+    url_endpoint="$(curl $(curl_options GET "${url_short}") \
+        -L -w %{url_effective} -o /dev/null 2>/dev/null || :)"
+    if [ "${url_endpoint}" != "${url_long}" ]; then
+        printf "${FAILED}\nIncorrect redirection:
+url_long=${url_long}
+url_short=${url_short}
+url_endpoint=${url_endpoint}
+" >&2
+    fi
+}
+n=100
+pids=()
+for i in $(seq 1 $n); do
+    # Select random url_long
+    index=$((${RANDOM} % ${#urls_long[@]}))
+    url_long="${urls_long[${index}]}"
+    check_mapping "${url_long}" & pid=$!
+    pids+=(${pid})
+done
+for pid in ${pids[@]}; do
+    wait ${pid}
+done
+echo "."
+
+# Send wrongly formatted POST requests and check the error response
+printf "Test invalid POST    "
+datas=(                    \
+    "url_long=google..com" \
+    "URL_long=google.com"  \
+    "key=value"            \
+    "this_is_wrong"        \
+    ""                     \
+)
+for data in ${datas[@]}; do
+    status_code="$(curl $(curl_options POST) -d "${data}" \
+        -w %{http_code} -o /dev/null 2>/dev/null || :)"
+    if [ "${status_code}" -lt 400 ] || [ "${status_code}" -ge 500 ]; then
+        printf "${FAILED}\nStatus was ${status_code} on -d ${data}\n" >&2
+        exit 1
+    fi
+done
+echo "."
+
+# Send GET request for nonexisting (impossible) pages
+printf "Test nonexisting GET "
+urls_short=(                   \
+    "${address}:${port}/0/0"   \
+    "${address}:${port}/a.com" \
+    "${address}:${port}/a-b"   \
+)
+for url_short in ${urls_short[@]}; do
+    status_code="$(curl $(curl_options GET "${url_short}") \
+       -w %{http_code} -o /dev/null 2>/dev/null || :)"
+    if [ "${status_code}" -lt 400 ] || [ "${status_code}" -ge 500 ]; then
+        printf "${FAILED}\nStatus was ${status_code} for ${url_short}\n" >&2
+        exit 1
+    fi
+done
+echo "."
+
+
+
+################
+# Stress tests #
+################
+printf "\n${esc_bold}Stress tests${esc_normal}\n"
+
+# Stress test root GET
+printf "Test GET:      "
+stress_get(){
+    n=$1  # Number of requst batches
+    N=$2  # Number of requsts to send in a single curl command
+    pids=()
+    t0=$(date +%s%N)
+    for i in $(seq 1 $n); do
+        curl $(curl_options GET "${address}:${port}?[1-$N]") >/dev/null & pid=$!
+        pids+=(${pid})
+    done
+    t1=$(date +%s%N)
+    for pid in ${pids[@]}; do
+        wait ${pid}
+    done
+    t2=$(date +%s%N)
+    # Echo back time intervals in ms
+    echo "$(((t1 - t0)/1000000)) $(((t2 - t1)/1000000))"
+}
+n=25
+N=400
+deltats="$(stress_get $n $N)"
+deltat0=$(echo "${deltats}" | awk '{print $1}')
+deltat1=$(echo "${deltats}" | awk '{print $2}')
+printf "${n}*${N} = $((n*N)) request send in ${deltat0} ms, \
+served in ${deltat1} ms\n"
+
+# Stress test POST
+printf "Test POST:     "
+# Generate random, valid URLs
+generate_random_url(){
+    min=$1  # Minimum length of returned URL
+    max=$2  # Maximum length of returned URL
+    charset='a-zA-Z0-9./'
+    length=$((min + ${RANDOM} % (max - min + 1)))
+    random_url="$(cat /dev/urandom | tr -dc "${charset}" \
+        | fold -w ${length} | head -n 1)"
+    # The first character should be alphanumeric
+    if [ "${random_url:0:1}" == "." ] || [ "${random_url:0:1}" == "/" ]; then
+        generate_random_url ${min} ${max}
+        return
+    fi
+    # Two dots may appear next to each other, which is illegal
+    if [[ "${random_url}" == *".."* ]]; then
+        generate_random_url ${min} ${max}
+        return
+    fi
+    echo "${random_url}"
+}
+n=25
+N=400
+min=1
+max=32
+urls_long=()
+for i in $(seq 1 $n); do
+    urls_long+=("$(generate_random_url ${min} ${max})")
+done
+# Do the stress test
+stress_post(){
+    n=$1  # Number of requst batches
+    N=$2  # Number of requsts to send in a single curl command
+    pids=()
+    t0=$(date +%s%N)
+    for url_long in ${urls_long[@]}; do
+        curl $(curl_options POST "${address}:${port}?[1-$N]") \
+            -d "url_long=${url_long}" >/dev/null & pid=$!
+        pids+=(${pid})
+    done
+    t1=$(date +%s%N)
+    for pid in ${pids[@]}; do
+        wait ${pid}
+    done
+    t2=$(date +%s%N)
+    # Echo back time intervals in ms
+    echo "$(((t1 - t0)/1000000)) $(((t2 - t1)/1000000))"
+}
+deltats="$(stress_post $n $N)"
+deltat0=$(echo "${deltats}" | awk '{print $1}')
+deltat1=$(echo "${deltats}" | awk '{print $2}')
+printf "${n}*${N} = $((n*N)) request send in ${deltat0} ms, \
+served in ${deltat1} ms\n"
+
+# Stress test redirect
+printf "Test redirect: "
+# Get all short URLs from the POST stress test
+urls_short=()
+for url_long in ${urls_long[@]}; do
+    html="$(curl $(curl_options POST) -d "url_long=${url_long}")"
+    url_short="$(get_url_short "${html}")"
+    urls_short+=("${url_short}")
+done
+# Do the tress test
+stress_redirect(){
+    n=$1  # Number of requst batches
+    N=$2  # Number of requsts to send in a single curl command
+    pids=()
+    t0=$(date +%s%N)
+    for url_short in ${urls_short[@]}; do
+        curl $(curl_options GET "${url_short}?[1-$N]") & pid=$!
+        pids+=(${pid})
+    done
+    t1=$(date +%s%N)
+    for pid in ${pids[@]}; do
+        wait ${pid}
+    done
+    t2=$(date +%s%N)
+    # Echo back time intervals in ms
+    echo "$(((t1 - t0)/1000000)) $(((t2 - t1)/1000000))"
+}
+deltats="$(stress_redirect $n $N)"  # n and N reused from the POST stress test
+deltat0=$(echo "${deltats}" | awk '{print $1}')
+deltat1=$(echo "${deltats}" | awk '{print $2}')
+printf "${n}*${N} = $((n*N)) request send in ${deltat0} ms, \
+served in ${deltat1} ms\n"
+
+
+
+# Remember to shut down the service and this script properly
+graceful_exit
