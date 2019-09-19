@@ -145,7 +145,6 @@ class RedirectHandler(MainHandler):
         # Database lookup failed
         await self.send_error_emulate(404, f'Destination not found: "{path}"')
 
-
 # Class handling numeric encoding of numbers in any base
 class Encoder:
     def __init__(self, alphabet):
@@ -186,6 +185,45 @@ class Database:
             # Commit changes to disk before closing file
             table.commit()
 
+# Last recently used cache, used to cache the
+# database lookups on the server processes.
+class LruCache:
+    def __init__(self, capacity=1024, data=None):
+        self.capacity = capacity
+        if data is None:
+            data = {}
+        self.data = dict(data)
+
+    def get(self, key):
+        try:
+            val = self[key]
+        except KeyError:
+            return None
+        return val
+
+    def __getitem__(self, key):
+        val = self.data[key]
+        # If here, lookup was succesfull.
+        # Reinsert the item, so that it appears at the top.
+        self.data.pop(key)
+        self.data[key] = val
+        return val
+
+    def __setitem__(self, key, val):
+        # Pop if key already exists,
+        # so that when inserted it appears at the end.
+        try:
+            self.data.pop(key)
+        except KeyError:
+            pass
+        # Pop first used if full
+        if len(self) == self.capacity:
+            self.data.pop(next(iter(self.data)))
+        self.data[key] = val
+
+    def __len__(self):
+        return len(self.data)
+
 # Class representing the web service.
 # It has the Tornado server and application as attributes.
 class Service:
@@ -220,8 +258,9 @@ class Service:
             + [chr(i) for i in range(65,  91)]  # A-Z
             + [chr(i) for i in range(97, 123)]  # a-z
         ))
-        # Instantiate database
+        # Instantiate database and caches
         self.database = Database(self.database_filename)
+        self.database_cache = {'long2short': LruCache(), 'short2long': LruCache()}
         # Tuples of multiprocessing queues, for communicating
         # back and forth between server processes and the
         # database process, one queue for each server process.
@@ -410,9 +449,17 @@ class Service:
 
     # Method for looking up URLs in the database
     async def lookup(self, url, tablename):
+        # Look for result in cache
+        cache = self.database_cache[tablename]
+        result = cache.get(url)
+        if result is not None:
+            return result
+        # Not found in cache. Query the database process.
         item = (tablename, url)
         self.queue_server2db.put(item)
-        return self.queue_db2server.get()
+        result = self.queue_db2server.get()
+        cache[url] = result
+        return result
 
 
 
