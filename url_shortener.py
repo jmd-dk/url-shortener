@@ -493,6 +493,7 @@ def start_service(address=None, port=None, database=None, nprocs=None, verbosity
         # A function is returned, which when called stops the service.
         process = multiprocessing.Process(target=start)
         process.start()
+        time.sleep(1)  # Let service initialize completely
         return lambda sig=signal.SIGINT: os.kill(process.pid, sig)
 
 
