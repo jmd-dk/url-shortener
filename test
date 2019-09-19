@@ -5,7 +5,7 @@
 # GET and POST requests.
 # Specifications needed for the web server may be changed below.
 # Test output is written to stdout+stderr.
-# If the web service is not already running, it will be fire up.
+# If the web service is not already running, it will be fired up.
 # In this case, it will also be shut down at the end of the script.
 
 
