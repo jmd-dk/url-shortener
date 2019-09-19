@@ -212,6 +212,7 @@ url_long=${url_long}
 url_short=${url_short}
 url_endpoint=${url_endpoint}
 " >&2
+        exit 1
     fi
 }
 n=100
