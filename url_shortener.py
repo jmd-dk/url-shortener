@@ -380,11 +380,11 @@ class Service:
             time.sleep(1)
             return  # Ought to be killed before reaching here
         pids = sorted(
-            int(line.strip())
+            int(line.strip().split()[0].strip())
             for line in subprocess.check_output(
-                f'ps -o pid -g $(ps -o sid= -p {self.master_pid})', shell=True,
+                f'ps -o pid,cmd -g $(ps -o sid= -p {self.master_pid})', shell=True,
             ).decode().split('\n')
-            if 'pid' not in line.lower() and line.strip()
+            if line.strip() and 'python' in line
         )
         for pid in pids:
             if pid > self.master_pid:
