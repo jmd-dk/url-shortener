@@ -70,4 +70,5 @@ processors and a verbosity level of `2`.
 
 
 <b id="f1">¹</b> With the exception of left 0-padded strings. [↩](#a1)
-<b id="f2">¹</b> I have only tested it with Python 3.7. [↩](#a2)
+
+<b id="f2">²</b> I have only tested it with Python 3.7. [↩](#a2)
