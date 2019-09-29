@@ -108,10 +108,7 @@ nprocs=4 ./test
 If the service is already running on the matching `address` and `port`,
 this will be used for the test. Otherwise, a new service will be
 spun up. As some warnings are emitted by the service during the tests,
-it is nicer to run it in terminal window separate from the tests.
-
-Here is an example demonstrating the effectiveness of having multiple
-server processes:
+it is nicer to run it in a terminal window separate from the tests.
 
 
 
